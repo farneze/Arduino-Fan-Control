@@ -12,9 +12,6 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 Encoder myEnc(21, 20);
 
 long oldPosition  = -999;
-int percentage = 0;
-
-char message[6] = "hello";
 
 byte zeroPerc[8] = {0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000};
 byte twentyPerc[8] = {0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b10000};
@@ -23,7 +20,9 @@ byte sixtyPerc[8] = {0b11100,0b11100,0b11100,0b11100,0b11100,0b11100,0b11100,0b1
 byte eightyPerc[8] = {0b11110,0b11110,0b11110,0b11110,0b11110,0b11110,0b11110,0b11110};
 byte hundredPerc[8] = {0b11111,0b11111,0b11111,0b11111,0b11111,0b11111,0b11111,0b11111};
 
-int sixty = 0;
+int fan = 0;
+int rpm = 0;
+
 void setup()
 {
   delay(2000);     
@@ -42,33 +41,54 @@ void setup()
 
 void loop() {
   long newPosition = myEnc.read();
+  
   if (newPosition > 100) newPosition = 100;
   if (newPosition < 0) newPosition = 0;
-  percentage = 100*newPosition/90;
+  
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
-    Serial.print("New: ");
-    Serial.println(newPosition);
-    Serial.print("Perc: ");
-    Serial.println(newPosition);
-    lcdbar(newPosition);
+    fanSpeedLine(newPosition);
+    barLine(newPosition);
+
     
   }
+  
+  if (millis()%100 == 0){
+    
+  } else if (millis()%50==0){
+    
+  }
+
+
 }
 
-void lcdbar(long pos) {
-  long barPercentage = 80*pos/100;
-  int times = barPercentage/5;
-  int rest = barPercentage%5;
-  String percentageText = "Fan: " + pos;
-  percentageText = percentageText + "%";
-  lcd.clear();
-  lcd.print(percentageText);
+void fanSpeedLine(long percent) {
+  lcd.setCursor(0,0);
+  lcd.print("                ");
+  lcd.setCursor(0,0);
+  lcd.print("Fan: ");
+  lcd.print(percent);
+  lcd.print("%");
+  
+  //lcd.print("Speed: "+percent+"%");
+}
+
+void barLine(long percent) {
+  long barValue = 80 * percent / 100;
+  int times = barValue / 5;
+  int rest = barValue % 5;
+  
+
+  // Sets how many characters will appear with full pixels
+  lcd.setCursor(0,1);
+  lcd.print("                ");
   
   for (int i = 0; i<times;i++){
     lcd.setCursor(i,1);
     lcd.write(5);
   }
+
+  // Selects pixels of last character
   switch (rest) {
     case 0:
       lcd.setCursor(times,1);
