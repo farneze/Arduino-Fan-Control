@@ -1,22 +1,38 @@
 //sketch created by Akshay Joseph
 
-// Needs to install teensy library
-// Needs to manually include LiquidCrystal_I2C.h into library folder
+// Needs to:
+// - Install teensy library
+// - Manually include LiquidCrystal_I2C.h into library folder
+// - Include Paul's enconder
 
 #include <Encoder.h>
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 
+#define ledPin 17
+#define BLANK "                "
+
+#define FAN_SENSE_PIN 4
+#define FAN_PWM_PIN 5
+#define FAN 0
+#define RPM 1
+
+#define ENC_PIN_A 21
+#define ENC_PIN_B 20
+#define ENC_START 10
+#define ENC_STEP 1
+
+#define ENC_MIN_VALUE 0
+#define ENC_MAX_VALUE 100
+
+
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-Encoder myEnc(21, 20);
+Encoder myEnc(ENC_PIN_A, ENC_PIN_B);
 
-int oldPosition  = 0;
+int oldPosition  = -1;
 
 int fanPercent = 0, rpmSpeed = 0, deltaT = 0, oldDeltaT = 0;;
-
-int fanSensePin = 4;
-int fanPwmPin = 5;
 
 unsigned long duration;
 
@@ -31,12 +47,12 @@ void setup()
 {
   delay(2000);     
   Serial.begin(9600);
-  Serial.println("FanControl ProtoType");
+  Serial.println("Initializing...");
 
-  pinMode(fanSensePin, INPUT);
-  pinMode(fanPwmPin, OUTPUT);
+  pinMode(FAN_SENSE_PIN, INPUT);
+  pinMode(FAN_PWM_PIN, OUTPUT);
 
-  analogWrite(fanPwmPin, 255);
+  analogWrite(FAN_PWM_PIN, 255);
   
   lcd.begin();
   lcd.backlight();
@@ -47,65 +63,66 @@ void setup()
   lcd.createChar(4, eightyPerc);
   lcd.createChar(5, hundredPerc);
   lcd.clear();
+  lcd.print("Initializing...");
 
+  delay(5000);
+
+  myEnc.write(ENC_START);
   
+  analogWrite(FAN_PWM_PIN, 255 * ENC_START / 100);
+  
+  lcdPrintFanPercSpeed(ENC_START, FAN);
+  lcdPrintBarLine(ENC_START);
 }
 
 void loop() {
-  int newPosition = myEnc.read();
+  int newPosition = myEnc.read() * ENC_STEP;
 
-  //duration = pulseIn(fanSensePin, LOW);
-  //Serial.println(duration);
-  
-  if (newPosition > 100) newPosition = 100;
-  if (newPosition < 0) newPosition = 0;
+  if (newPosition <= 0 || ( newPosition < 10 && oldPosition > newPosition )) myEnc.write(0);
+  if (newPosition > 0 && newPosition < 10 && oldPosition < newPosition ) myEnc.write(ENC_START);
+
+  if (newPosition > ENC_MAX_VALUE) myEnc.write((ENC_MAX_VALUE) / ENC_STEP);
+  //if (newPosition < ENC_MIN_VALUE) myEnc.write((ENC_MIN_VALUE - ENC_START) / ENC_STEP);
   
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
-    
     fanPercent = newPosition;
-    lcdPrintFanPercSpeed(fanPercent, 0); // 0 for Fan, 1 for RPM
     
+    lcdPrintFanPercSpeed(fanPercent, FAN);
     lcdPrintBarLine(fanPercent);
 
-    int dutyCycle = 255 * newPosition / 100 ;
-
-    Serial.print("Pos: ");
+    long dutyCycle = 255 * newPosition / 100 ;
+    //long dutyCycle = newPosition;
+    
+    Serial.println("----");
     Serial.println(newPosition);
-    Serial.print("Duty: ");
     Serial.println(dutyCycle);
-    
-    analogWrite(fanPwmPin, dutyCycle);
-    
+    analogWrite(FAN_PWM_PIN, dutyCycle);    
   }
-  
- 
-  
-  /*if (%100 == 0){
-    
-  } else if (%50==0){
-    
-  }*/
-
-
 }
 
 void fanDutyCycle(){
-  digitalWrite(fanPwmPin, HIGH);
+  digitalWrite(FAN_PWM_PIN, HIGH);
   delayMicroseconds(100);
-  digitalWrite(fanPwmPin, LOW);
+  digitalWrite(FAN_PWM_PIN, LOW);
   delayMicroseconds(1000 - 100);
 }
 
 void lcdPrintFanPercSpeed(int value, bool option) {
   lcd.setCursor(0,0);
-  lcd.print("                ");
+  lcd.print(BLANK);
   lcd.setCursor(0,0);
+
+
   
   if (option == 0){
     lcd.print("Fan: ");
-    lcd.print(value);
-    lcd.print("%");
+    if (value == 0) {
+      lcd.print("OFF");
+    } else {
+      lcd.print(value);
+      lcd.print("%");
+    }
   } else {
     lcd.print("Speed: ");
     lcd.print(value);
@@ -120,9 +137,9 @@ void lcdPrintBarLine(int percent) {
   
   // Sets how many characters will appear with full pixels
   lcd.setCursor(0,1);
-  lcd.print("                ");
+  lcd.print(BLANK);
   
-  for (int i = 0; i<times;i++){
+  for (int i = 0; i < times; i++){
     lcd.setCursor(i,1);
     lcd.write(5);
   }
