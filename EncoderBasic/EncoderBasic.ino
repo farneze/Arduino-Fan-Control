@@ -15,13 +15,16 @@
 Encoder myEnc(21, 20);
 //   avoid using pins with LEDs attached
 
+long encStartValue = 10;
+
 void setup() {
   delay(2000);     
   Serial.begin(9600);
   Serial.println("Basic Encoder Test:");
+  myEnc.write(encStartValue);
 }
 
-long oldPosition  = -999;
+long oldPosition  = -1;
 
 void loop() {
   long newPosition = myEnc.read();

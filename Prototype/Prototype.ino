@@ -52,8 +52,6 @@ void setup()
   Serial.begin(9600);
   Serial.println("Initializing...");
 
-  
-
   analogWrite(FAN_PWM_PIN, 255);
   
   lcd.begin();
