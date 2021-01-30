@@ -9,17 +9,14 @@
 #include <Wire.h> 
 #include <LiquidCrystal_I2C.h>
 
-#define ledPin 17
 #define BLANK "                "
-
-#define FAN_SENSE_PIN 0
-#define FAN_PWM_PIN 5
-#define FAN 0
-#define RPM 1
 
 #define ENC_PIN_A 21
 #define ENC_PIN_B 20
 #define ENC_STEP 5
+
+#define FAN_SENSE_PIN 0
+#define FAN_PWM_PIN 5
 
 #define FAN_START 10
 #define FAN_MAX_VALUE 100
@@ -69,10 +66,10 @@ void setup()
 
   myEnc.write(FAN_START);
   
-  analogWrite(FAN_PWM_PIN, 255 * FAN_START / 100);
+  analogWrite( FAN_PWM_PIN, 255 * FAN_START / 100 );
   
-  lcdPrintFanPercSpeed(FAN_START, FAN);
-  lcdPrintBarLine(FAN_START);
+  lcdPrintFanPercSpeed( FAN_START, 0 );
+  lcdPrintBarLine( FAN_START );
 }
 
 void loop() {
@@ -83,7 +80,6 @@ void loop() {
   if (newPosition > 0 && newPosition < 10 && oldPosition < newPosition ) myEnc.write(FAN_START / ENC_STEP);
 
   if (newPosition > FAN_MAX_VALUE) myEnc.write(FAN_MAX_VALUE / ENC_STEP);
-
   
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
