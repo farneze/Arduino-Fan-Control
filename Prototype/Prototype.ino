@@ -12,29 +12,28 @@
 #define ledPin 17
 #define BLANK "                "
 
-#define FAN_SENSE_PIN 4
+#define FAN_SENSE_PIN 0
 #define FAN_PWM_PIN 5
 #define FAN 0
 #define RPM 1
 
 #define ENC_PIN_A 21
 #define ENC_PIN_B 20
-#define ENC_START 10
-#define ENC_STEP 1
+#define ENC_STEP 5
 
-#define ENC_MIN_VALUE 0
-#define ENC_MAX_VALUE 100
-
+#define FAN_START 10
+#define FAN_MAX_VALUE 100
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 Encoder myEnc(ENC_PIN_A, ENC_PIN_B);
 
-int oldPosition  = -1;
+int oldPosition  = 0;
 
-int fanPercent = 0, rpmSpeed = 0, deltaT = 0, oldDeltaT = 0;;
+unsigned int fanPercent = 0, rpm = 0;
 
-unsigned long duration;
+unsigned long timeold = 0;
+volatile byte half_revolutions = 0;
 
 byte zeroPerc[8] = {0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000};
 byte twentyPerc[8] = {0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b10000,0b10000};
@@ -45,12 +44,15 @@ byte hundredPerc[8] = {0b11111,0b11111,0b11111,0b11111,0b11111,0b11111,0b11111,0
 
 void setup()
 {
+  pinMode(FAN_PWM_PIN, OUTPUT);
+  pinMode(FAN_SENSE_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(FAN_SENSE_PIN), revolutions, RISING);
+
   delay(2000);     
   Serial.begin(9600);
   Serial.println("Initializing...");
 
-  pinMode(FAN_SENSE_PIN, INPUT);
-  pinMode(FAN_PWM_PIN, OUTPUT);
+  
 
   analogWrite(FAN_PWM_PIN, 255);
   
@@ -65,73 +67,93 @@ void setup()
   lcd.clear();
   lcd.print("Initializing...");
 
-  delay(5000);
+  delay(2500);
 
-  myEnc.write(ENC_START);
+  myEnc.write(FAN_START);
   
-  analogWrite(FAN_PWM_PIN, 255 * ENC_START / 100);
+  analogWrite(FAN_PWM_PIN, 255 * FAN_START / 100);
   
-  lcdPrintFanPercSpeed(ENC_START, FAN);
-  lcdPrintBarLine(ENC_START);
+  lcdPrintFanPercSpeed(FAN_START, FAN);
+  lcdPrintBarLine(FAN_START);
 }
 
 void loop() {
+
   int newPosition = myEnc.read() * ENC_STEP;
 
   if (newPosition <= 0 || ( newPosition < 10 && oldPosition > newPosition )) myEnc.write(0);
-  if (newPosition > 0 && newPosition < 10 && oldPosition < newPosition ) myEnc.write(ENC_START);
+  if (newPosition > 0 && newPosition < 10 && oldPosition < newPosition ) myEnc.write(FAN_START / ENC_STEP);
 
-  if (newPosition > ENC_MAX_VALUE) myEnc.write((ENC_MAX_VALUE) / ENC_STEP);
-  //if (newPosition < ENC_MIN_VALUE) myEnc.write((ENC_MIN_VALUE - ENC_START) / ENC_STEP);
+  if (newPosition > FAN_MAX_VALUE) myEnc.write(FAN_MAX_VALUE / ENC_STEP);
+
   
   if (newPosition != oldPosition) {
     oldPosition = newPosition;
     fanPercent = newPosition;
     
-    lcdPrintFanPercSpeed(fanPercent, FAN);
+    lcdPrintFanPercSpeed(fanPercent, rpm);
+    
     lcdPrintBarLine(fanPercent);
 
-    long dutyCycle = 255 * newPosition / 100 ;
-    //long dutyCycle = newPosition;
-    
-    Serial.println("----");
-    Serial.println(newPosition);
-    Serial.println(dutyCycle);
+    long dutyCycle = 255 * fanPercent / 100 ;
     analogWrite(FAN_PWM_PIN, dutyCycle);    
+
+    //if (newPosition == 0) lcdPrintFanPercSpeed(0, rpm);
   }
+  
+   if (half_revolutions >= 40) { 
+     //Update RPM every 20 counts, increase this for better RPM resolution,
+     //decrease for faster update
+     rpm = 30*1000/(millis() - timeold)*half_revolutions;
+     timeold = millis();
+     half_revolutions = 0;
+     lcdPrintFanPercSpeed(fanPercent, rpm);
+   } 
+   if (millis() > timeold + 2500 && millis() < timeold + 2600){
+     lcdPrintFanPercSpeed(0, 0);
+   }
+   
 }
 
-void fanDutyCycle(){
-  digitalWrite(FAN_PWM_PIN, HIGH);
-  delayMicroseconds(100);
-  digitalWrite(FAN_PWM_PIN, LOW);
-  delayMicroseconds(1000 - 100);
+void revolutions()
+{
+  half_revolutions++;
+  //Each rotation, this interrupt function is run twice
 }
 
-void lcdPrintFanPercSpeed(int value, bool option) {
+void lcdPrintFanPercSpeed(unsigned int fanPercent, unsigned int rpm) {
   lcd.setCursor(0,0);
   lcd.print(BLANK);
-  lcd.setCursor(0,0);
+  lcd.setCursor(1,0);
 
-
-  
-  if (option == 0){
-    lcd.print("Fan: ");
-    if (value == 0) {
-      lcd.print("OFF");
-    } else {
-      lcd.print(value);
-      lcd.print("%");
-    }
+  if (fanPercent <= 0) {
+    lcd.print("OFF");
+  } else if (fanPercent >= 100) {
+    lcd.setCursor(0,0);
+    lcd.print(fanPercent);
+    lcd.print("%");
   } else {
-    lcd.print("Speed: ");
-    lcd.print(value);
+    lcd.print(fanPercent);
+    lcd.print("%");
+  }
+  
+  if (rpm >= 1000) {
+    lcd.setCursor(8,0);
+    lcd.print(rpm);
+    lcd.print(" RPM");
+  } else if ( rpm >= 100) {
+    lcd.setCursor(9,0);
+    lcd.print(rpm);
+    lcd.print(" RPM");
+  } else {
+    lcd.setCursor(11,0);
+    lcd.print("0");
     lcd.print("RPM");
   }
 }
 
 void lcdPrintBarLine(int percent) {
-  long barValue = 80 * percent / 100;
+  long barValue = 80 * percent / 100; // 80 horizontal pixels in total, 16 chars * 5 pixels each
   int times = barValue / 5;
   int rest = barValue % 5;
   
